@@ -1,4 +1,5 @@
 credentials.yaml
+tor/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

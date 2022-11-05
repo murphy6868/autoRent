@@ -43,7 +43,7 @@ def getOrderStatus(credentials):
             RT = tbody.find("span", {"class": "RT"}).text
             TotalAmount = tbody.find("div", {"class": "MC TotalAmount"}).text
             print(OrderNo, CreateDate, RD, RT, TotalAmount)
-            orders+= '\n' + " ".join([OrderNo, CreateDate, RD, RT, TotalAmount])
+            orders += '\n' + " ".join([OrderNo, CreateDate, RD, RT, TotalAmount])
     print(orders)
 
 

@@ -1,12 +1,12 @@
 from getpass import getpass
-import time, random, sys, os
+import time, random, sys, os, copy
 import multiprocessing
 from multiprocessing import Pool
 from rental_process import RentalProcess
 from datetime import datetime, timedelta
 import order_status
-import utils
-import log_utils
+import utils, log_utils
+import requests
 L = log_utils.createLogger(__name__)
 
 def doRent(rentArgs):
@@ -17,19 +17,21 @@ def doRent(rentArgs):
     rentCourtIDs = rentArgs['rentCourtIDs']
     random.shuffle(rentCourtIDs)
     credentials = rentArgs['credentials']
+    proxy = rentArgs['proxy']
 
-    rentalProcess = RentalProcess(credentials)
-    for i in range(999999999):
-        time.sleep(random.random())
+    rentalProcess = RentalProcess(credentials, proxy)
+    for i in range(99999):
         for rentCourtID in rentCourtIDs:
+            L.info(f"round {i}, Court {rentCourtID}")
             try:
                 rentalProcess.rent(y, m, d, rentHours, rentCourtID)
+                #rentalProcess.checkIP()
             except KeyboardInterrupt:
                 L.warning("KeyboardInterrupt")
                 return
             except Exception as e:
                 L.warning(e)
-        if i % 2 == 1:
+        if i % 10 == 9:
             try:
                 rentalProcess.refreshToken()
             except KeyboardInterrupt:
@@ -53,19 +55,27 @@ def waitToRent(y, m, d):
         time.sleep(1)
 
 def main():
-    
-    y, m, d = 2022, 11, 8
+    processNum = 50
+    torSocksPorts = utils.startTorService(processNum)
+
+    y, m, d = 2022, 11, 7
+
 
     # 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
-    rentCourtIDs = [3,4,5,6,7,8,9,10,11,12,13,14,15] 
+    rentCourtIDs = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15] 
+    #rentCourtIDs = [5] 
 
-    # 14,15,16   19,20,21
-    rentHours = [19,20,21] 
+    # 14,15,16   18,19,20   19,20,21
+    rentHours = [19,20]
+    #rentHours = [17]
+    
 
     credentials = utils.getCredentials()
+    
     print("y, m, d:", y, m, d)
     print("rentCourtIDs", rentCourtIDs)
     print("rentHours", rentHours)
+    print("processNum", processNum)
     waitToRent(y, m, d)
     
     rentArgs = {
@@ -76,16 +86,21 @@ def main():
         'rentCourtIDs':rentCourtIDs,
         'credentials':credentials
     }
-
+    
     #utils.getRentTasks()
     #order_status.getOrderStatus(credentials)
     #exit()
 
-    processNum = multiprocessing.cpu_count() * 2
+    #doRent(rentArgs)
+    #exit()
 
-    inputs = [rentArgs]*processNum
+    inputs = []
+    for i in range(processNum):
+        rentArgs.update({"proxy": {"http": f"socks5://localhost:{torSocksPorts[i]}", 
+                                    "https": f"socks5://localhost:{torSocksPorts[i]}"}})
+        inputs.append(copy.deepcopy(rentArgs))
+
     pool = Pool(processNum)
-
     pool_outputs = pool.map(doRent, inputs)
     print(pool_outputs)
 

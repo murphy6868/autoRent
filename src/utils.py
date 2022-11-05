@@ -1,13 +1,13 @@
 from pathlib import Path
-import yaml
+import yaml, subprocess, psutil
 import _dataclasses
 import log_utils
 L = log_utils.createLogger(__name__)
 
-ROOT_PATH = Path(__file__).parent.parent
+PROJECT_ROOT_PATH = Path(__file__).parent.parent
 
 def getCredentials() -> _dataclasses.Credentials:
-    path = ROOT_PATH.joinpath("credentials.yaml")
+    path = PROJECT_ROOT_PATH.joinpath("credentials.yaml")
 
     if path.exists():
         L.debug(f"loading credentials from {path}")
@@ -20,10 +20,10 @@ def getCredentials() -> _dataclasses.Credentials:
         return credentials
 
 def getRentTasks():
-    task_path = ROOT_PATH.joinpath("tasks.yaml")
-    sample_path = ROOT_PATH.joinpath("sample_tasks.yaml")
-    if not task_path.exists():
-        L.error(f"missing - {task_path}")
+    taskPath = PROJECT_ROOT_PATH.joinpath("tasks.yaml")
+    samplePath = PROJECT_ROOT_PATH.joinpath("sample_tasks.yaml")
+    if not taskPath.exists():
+        L.error(f"missing - {taskPath}")
         rentTasks = []
         rentTask = {
             "date" : "2022/10/31",
@@ -37,5 +37,32 @@ def getRentTasks():
             "rentCourtIDs" : "4,5,6",
         }
         rentTasks.append(rentTask)
-        with sample_path.open('w') as yaml_file:
-            yaml_file.write(yaml.safe_dump(rentTasks))
+        with samplePath.open('w') as f:
+            f.write(yaml.safe_dump(rentTasks))
+
+def startTorService(daemonNum, baseSocksPort=9050):
+    torPath = PROJECT_ROOT_PATH.joinpath("tor")
+
+    pidPaths = torPath.glob("*.pid")
+    for pidPath in pidPaths:
+        with pidPath.open('r') as f:
+            pid = int(f.read())
+        if psutil.pid_exists(pid):
+            process = psutil.Process(pid)
+            process_name = process.name()
+            if process_name == "tor":
+                process.kill()
+                print(pid, "killed")
+
+    torPath.mkdir(parents=True, exist_ok=True)
+    torSocksPorts = []
+    for d in range(daemonNum):
+        socksPort = baseSocksPort + d
+        torSocksPorts.append(socksPort)
+        torDataPath = torPath.joinpath(f"tor{d}")
+        p = subprocess.Popen([  "tor", "--RunAsDaemon", "0", 
+                                "--PidFile", f"{torPath.as_posix()}/tor{d}.pid", 
+                                "--SocksPort", str(socksPort), 
+                                "--DataDirectory", torDataPath.as_posix()])
+    return torSocksPorts
+    # Follow this link: http://blog.databigbang.com/distributed-scraping-with-multiple-tor-circuits/

@@ -1,12 +1,13 @@
 from ast import Str
 from bs4 import BeautifulSoup
 import requests, functools
-import log_utils
+import log_utils, random
 L = log_utils.createLogger(__name__)
 
 SSO_AUTH_URL = "https://adfs.ntu.edu.tw"
 PE_MEMBER_URL = "https://rent.pe.ntu.edu.tw/member/"
 PE_SSO_URL = "https://rent.pe.ntu.edu.tw/sso2_go.php"
+
 class SsoHelper():
     def __init__(self, credentials):
         self.credentials = credentials
@@ -27,12 +28,8 @@ class SsoHelper():
         else:
             return self.login()
 
-    def login(self, sess, timeout=5) -> str:
-        
-        sess.request = functools.partial(sess.request, timeout=timeout)
-        print(sess.headers)
+    def login(self, sess) -> str:
         res = sess.get(PE_SSO_URL, verify=False)
-        print(sess.headers)
         soup = BeautifulSoup(res.content, "html.parser")
         payload = {}
         form = soup.find("form")
