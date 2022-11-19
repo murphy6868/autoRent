@@ -1,30 +1,28 @@
 from getpass import getpass
-import time, random, sys, os, copy
+import time, random, sys, os, copy, pprint
 import multiprocessing
 from multiprocessing import Pool
 from rental_process import RentalProcess
 from datetime import datetime, timedelta
-import order_status
-import utils, log_utils
+import order_status, gen_tasks, slack_bot_utils
+import utils, log_utils, logging
 import requests
-L = log_utils.createLogger(__name__)
+L = log_utils.createLogger(__name__, log_level=logging.DEBUG)
 
 def doRent(rentArgs):
-    y = rentArgs['y']
-    m = rentArgs['m']
-    d = rentArgs['d']
+    rentDatetime = rentArgs['rentDatetime']
     rentHours = rentArgs['rentHours']
     rentCourtIDs = rentArgs['rentCourtIDs']
     random.shuffle(rentCourtIDs)
     credentials = rentArgs['credentials']
     proxy = rentArgs['proxy']
-
     rentalProcess = RentalProcess(credentials, proxy)
     for i in range(99999):
         for rentCourtID in rentCourtIDs:
             L.info(f"round {i}, Court {rentCourtID}")
+            # rentalProcess.rent(rentDatetime, rentHours, rentCourtID)
             try:
-                rentalProcess.rent(y, m, d, rentHours, rentCourtID)
+                rentalProcess.rent(rentDatetime, rentHours, rentCourtID)
                 #rentalProcess.checkIP()
             except KeyboardInterrupt:
                 L.warning("KeyboardInterrupt")
@@ -43,72 +41,48 @@ def doRent(rentArgs):
 
 
 
+def rent_badminton():
 
-def waitToRent(y, m, d):
-    startDate = datetime(y,m,d,23,59,45) - timedelta(days=8)
-    pointOneSec = timedelta(milliseconds=100)
-    while True:
-        delta = startDate - datetime.now()
-        if delta < pointOneSec:
-            break
-        print('  Wait for', str(delta)[:-5], 'to start at', startDate, end = '  \r')
-        time.sleep(1)
-
-def main():
-    processNum = 50
-    torSocksPorts = utils.startTorService(processNum)
-
-    y, m, d = 2022, 11, 7
-
-
-    # 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
-    rentCourtIDs = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15] 
-    #rentCourtIDs = [5] 
-
-    # 14,15,16   18,19,20   19,20,21
-    rentHours = [19,20]
-    #rentHours = [17]
-    
+    #slack_bot_utils.sendQRCode(); exit()
+    #slack_bot_utils.sendUnpaidOrder(); exit()
 
     credentials = utils.getCredentials()
-    
-    print("y, m, d:", y, m, d)
-    print("rentCourtIDs", rentCourtIDs)
-    print("rentHours", rentHours)
-    print("processNum", processNum)
-    waitToRent(y, m, d)
-    
-    rentArgs = {
-        'y':y,
-        'm':m,
-        'd':d,
-        'rentHours':rentHours,
-        'rentCourtIDs':rentCourtIDs,
-        'credentials':credentials
-    }
-    
-    #utils.getRentTasks()
-    #order_status.getOrderStatus(credentials)
-    #exit()
 
-    #doRent(rentArgs)
-    #exit()
+    tasks = utils.getRentTasks()
+    pools, tasks_inputs = [], []
+    totalProcessNum = 0
+    torSocksPort = 9052
+    for i, task in enumerate(tasks):
+        L.info(f"Task {i}:\n\t{task}")
 
-    inputs = []
-    for i in range(processNum):
-        rentArgs.update({"proxy": {"http": f"socks5://localhost:{torSocksPorts[i]}", 
-                                    "https": f"socks5://localhost:{torSocksPorts[i]}"}})
-        inputs.append(copy.deepcopy(rentArgs))
+        pools.append(Pool(task["processNum"]))
+        totalProcessNum += task['processNum']
 
-    pool = Pool(processNum)
-    pool_outputs = pool.map(doRent, inputs)
-    print(pool_outputs)
+        task_inputs = []
+        rentArgs = {
+            'rentDatetime': datetime.strptime(task['date'], "%Y.%m.%d"),
+            'rentHours': task['rentHours'],
+            'rentCourtIDs': task['rentCourtIDs'],
+            'credentials': credentials
+        }
+        for i in range(task["processNum"]):
+            rentArgs.update({"proxy": {"http": f"socks5://localhost:{torSocksPort}", 
+                                        "https": f"socks5://localhost:{torSocksPort}"}})
+            task_inputs.append(copy.deepcopy(rentArgs))
+            torSocksPort += 1
+        tasks_inputs.append(task_inputs)
 
+    torSocksPorts = utils.startTorService(totalProcessNum)
     
 
-
+    for pool, task_inputs in zip(pools, tasks_inputs):
+        utils.waitToRent(task_inputs[0]['rentDatetime'])
+        pool.map_async(doRent, task_inputs)
+    for pool in pools:
+        L.info('Pray!')
+        pool.close()
+        pool.join()
 
     
 if __name__ == '__main__':
-    
-    main()
+    rent_badminton()

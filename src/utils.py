@@ -1,10 +1,88 @@
+import subprocess, psutil, time, requests, functools, random, json, os, tempfile, shutil, sys, shlex, aiohttp
 from pathlib import Path
-import yaml, subprocess, psutil
+from datetime import datetime, timedelta
+import multiprocessing  
+import oyaml as yaml
 import _dataclasses
-import log_utils
-L = log_utils.createLogger(__name__)
-
+import logging, log_utils
+L = log_utils.createLogger(__name__, logging.DEBUG)
+from collections import OrderedDict
 PROJECT_ROOT_PATH = Path(__file__).parent.parent
+
+TOR_PROXY = {'http': 'socks5://localhost:9050', 'https': 'socks5://localhost:9050'}
+NO_PROXY = {"http": "", "https": "",}
+
+
+def runAsDaemon(target, args):
+    p = multiprocessing.Process(target=target, args=args, daemon=True)
+    p.start()
+
+
+def dump(s):
+    path = PROJECT_ROOT_PATH.joinpath('testing/dump.txt')
+    with path.open('w') as f:
+        f.write(str(s))
+def dump_json(s):
+    path = PROJECT_ROOT_PATH.joinpath('testing/dump_json.txt')
+    with path.open('w') as f:
+        json.dump(s, f)
+
+from aiosocksy.connector import ProxyConnector, ProxyClientRequest
+async def createAsyncSession():
+    sess = aiohttp.ClientSession(connector=ProxyConnector(), request_class=ProxyClientRequest, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:105.0) Gecko/20100101 Firefox/105.0",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "zh-TW,zh;q=0.8,en-US;q=0.5,en;q=0.3",
+            "Accept-Encoding": "gzip, deflate",
+            "Dnt": "1",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Te": "trailers",
+            "Connection": "close",
+        })
+    sess.get = functools.partial(sess.get, allow_redirects = False)
+    sess.post = functools.partial(sess.post, allow_redirects = False)
+    return sess
+
+def createSession(proxy = {}):
+    sess = requests.session()
+
+    sess.verify = False
+    sess.request = functools.partial(sess.request, timeout = 20+random.random()*10)
+    sess.get = functools.partial(sess.get, allow_redirects = False)
+    sess.post = functools.partial(sess.post, allow_redirects = False)
+    sess.proxies.update(proxy)
+    sess.headers.update(
+        {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:105.0) Gecko/20100101 Firefox/105.0",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "zh-TW,zh;q=0.8,en-US;q=0.5,en;q=0.3",
+            "Accept-Encoding": "gzip, deflate",
+            "Dnt": "1",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Te": "trailers",
+            "Connection": "close",
+        }
+    )
+    return sess
+
+def waitToRent(targetDate):
+    L.info("waitToRent")
+    startDate = targetDate + timedelta(days=-8, hours=23, minutes=59, seconds=45)
+    pointOneSec = timedelta(milliseconds=100)
+    while True:
+        delta = startDate - datetime.now()
+        if delta < pointOneSec:
+            break
+        print('  Wait for', str(delta)[:-7], 'to start at', startDate, end = '  \r')
+        time.sleep(0.1)
 
 def getCredentials() -> _dataclasses.Credentials:
     path = PROJECT_ROOT_PATH.joinpath("credentials.yaml")
@@ -21,48 +99,52 @@ def getCredentials() -> _dataclasses.Credentials:
 
 def getRentTasks():
     taskPath = PROJECT_ROOT_PATH.joinpath("tasks.yaml")
-    samplePath = PROJECT_ROOT_PATH.joinpath("sample_tasks.yaml")
     if not taskPath.exists():
         L.error(f"missing - {taskPath}")
-        rentTasks = []
-        rentTask = {
-            "date" : "2022/10/31",
-            "rentHours" : "8,9,10",
-            "rentCourtIDs" : "1,2,3"
-        }
-        rentTasks.append(rentTask)
-        rentTask = {
-            "date" : "2022/10/30",
-            "rentHours" : "9,10",
-            "rentCourtIDs" : "4,5,6",
-        }
-        rentTasks.append(rentTask)
-        with samplePath.open('w') as f:
-            f.write(yaml.safe_dump(rentTasks))
+        exit()
+    else:
+        with taskPath.open('r') as f:
+            tasks = yaml.safe_load(f)
+        return tasks
 
-def startTorService(daemonNum, baseSocksPort=9050):
-    torPath = PROJECT_ROOT_PATH.joinpath("tor")
+def killTorService():
+    PROCNAME = "tor"
+    for proc in psutil.process_iter():
+        if proc.name() == PROCNAME:
+            L.warning(f"killing {proc.pid}")
+            proc.kill()
 
-    pidPaths = torPath.glob("*.pid")
-    for pidPath in pidPaths:
-        with pidPath.open('r') as f:
-            pid = int(f.read())
-        if psutil.pid_exists(pid):
-            process = psutil.Process(pid)
-            process_name = process.name()
-            if process_name == "tor":
-                process.kill()
-                print(pid, "killed")
+def runTorCMD(torCMD, my_env):
+        p = subprocess.Popen(torCMD, env=my_env, stdout=subprocess.PIPE)
+        while True:
+            output = p.stdout.readline().decode("utf-8")
+            if not output:
+                break
+            if '100%' in output:
+                L.info(output)
+            
+ # Follow this link: http://blog.databigbang.com/distributed-scraping-with-multiple-tor-circuits/            
+def startTorService(daemonNum, baseSocksPort=9052, RunAsDaemon=0):
+    L.info(f"startTorService, daemonNum = {daemonNum}")
+    
+    tor_env = os.environ.copy()
+    tor_env["PATH"] = "/tmp2/b04902071/tor-0.4.7.10/src/app/:" + tor_env["PATH"]
 
-    torPath.mkdir(parents=True, exist_ok=True)
     torSocksPorts = []
+    tempDir = Path('/tmp/torData')
+    shutil.rmtree(tempDir, ignore_errors=True)
+    tempDir.mkdir()
+    
     for d in range(daemonNum):
         socksPort = baseSocksPort + d
         torSocksPorts.append(socksPort)
-        torDataPath = torPath.joinpath(f"tor{d}")
-        p = subprocess.Popen([  "tor", "--RunAsDaemon", "0", 
-                                "--PidFile", f"{torPath.as_posix()}/tor{d}.pid", 
-                                "--SocksPort", str(socksPort), 
-                                "--DataDirectory", torDataPath.as_posix()])
+        torDataDirPath = tempDir.joinpath(f"tor{d}")
+        torDataDirPath.mkdir()
+        torCMD = f"tor --RunAsDaemon {RunAsDaemon} --PidFile {tempDir.as_posix()}/tor{d}.pid --SocksPort {socksPort} --DataDirectory {torDataDirPath}"
+        torCMD = shlex.split(torCMD)
+        L.debug(torCMD)
+        runAsDaemon(runTorCMD, [torCMD, tor_env])
+        
     return torSocksPorts
-    # Follow this link: http://blog.databigbang.com/distributed-scraping-with-multiple-tor-circuits/
+   
+

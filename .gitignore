@@ -1,5 +1,8 @@
 credentials.yaml
 tor/
+.vscode/
+testing/
+*.code-workspace
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
