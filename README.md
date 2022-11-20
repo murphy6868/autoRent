@@ -19,7 +19,7 @@ Edit [tasks.yaml](tasks.yaml) (see [sample_tasks.yaml](sample_tasks.yaml))
 python3 src/main.py
 ```
 ## Usage 2 - Start Slack bot server
-
+Start Tor service on 127.0.0.1:9050
 ```
 python3 src/slack_bot_server/main.py
 ```
