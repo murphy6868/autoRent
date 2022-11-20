@@ -4,7 +4,7 @@ import multiprocessing
 from multiprocessing import Pool
 from rental_process import RentalProcess
 from datetime import datetime, timedelta
-import order_status, gen_tasks, slack_bot_utils
+import slack_bot_utils
 import utils, log_utils, logging
 import requests
 L = log_utils.createLogger(__name__, log_level=logging.DEBUG)
