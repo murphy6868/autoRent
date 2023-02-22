@@ -23,17 +23,11 @@ class SsoHelper():
         L.info("Login finished!")
         return True
 
-    def refreshToken(self, phpSessID, sess, rentDatetime=None) -> str:
-        if self.__verifyToken(phpSessID):
-            return phpSessID
-        else:
-            return self.login(sess, rentDatetime)
-
-    def login(self, sess, rentDatetime=False) -> str:
+    def login(self, sess, rentDatetime=False):
         while(1):
-            #return self.try_login(sess, rentDatetime)
             try:
-                return self.try_login(sess, rentDatetime)
+                self.__try_login(sess, rentDatetime)
+                return
             except KeyboardInterrupt:
                 L.warning("KeyboardInterrupt")
                 raise KeyboardInterrupt
@@ -42,18 +36,19 @@ class SsoHelper():
                 L.debug(traceback.format_exc())
         
 
-    def try_login(self, sess, rentDatetime=None) -> str:
+    def __try_login(self, sess, rentDatetime=None):
         res = sess.get(PE_SSO_URL)
         L.debug(f"location: {res.headers['location']}")
         res = sess.get(res.headers['location'], proxies=NO_PROXY)
-        # if rentDatetime:
-        #     L.info('pre get session')
-        #     utils.waitToRent(rentDatetime)
+
         soup = BeautifulSoup(res.content, "html.parser")
         payload = {}
         form = soup.find("form")
         payloadAction = form.get("action")
-        for ele in form.find_all("input"):
+        inputs = form.find_all("input")
+        if not inputs:
+            return
+        for ele in inputs:
             if "UsernameTextBox" in ele.get("name"):
                 payload[ele.get("name")] = self.credentials.username
             elif "PasswordTextBox" in ele.get("name"):
@@ -72,7 +67,6 @@ class SsoHelper():
             form.get("action"),
             data={ele.get("name"): ele.get("value") for ele in form.find_all("input")}, allow_redirects=False
         )
-        phpSessID = "PHPSESSID"
-        #self.__verifyToken(phpSessID)
+        
         L.info(f"SSO Login Finished!")
-        return phpSessID
+        return

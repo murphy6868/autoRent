@@ -13,17 +13,17 @@ def doRent(rentArgs):
     rentDatetime = rentArgs['rentDatetime']
     rentHours = rentArgs['rentHours']
     rentCourtIDs = rentArgs['rentCourtIDs']
-    random.shuffle(rentCourtIDs)
     credentials = rentArgs['credentials']
     proxy = rentArgs['proxy']
     rentalProcess = RentalProcess(credentials, proxy)
+    rentalProcess.login()
     for i in range(99999):
         for rentCourtID in rentCourtIDs:
             L.info(f"round {i}, Court {rentCourtID}")
-            # rentalProcess.rent(rentDatetime, rentHours, rentCourtID)
+            #rentalProcess.rent(rentDatetime, rentHours, rentCourtID); continue
             try:
                 rentalProcess.rent(rentDatetime, rentHours, rentCourtID)
-                #rentalProcess.checkIP()
+                #rentalProcess.__checkIP()
             except KeyboardInterrupt:
                 L.warning("KeyboardInterrupt")
                 return
@@ -31,7 +31,7 @@ def doRent(rentArgs):
                 L.warning(e)
         if i % 10 == 9:
             try:
-                rentalProcess.refreshToken()
+                rentalProcess.login()
             except KeyboardInterrupt:
                 L.warning("KeyboardInterrupt")
                 return
@@ -68,13 +68,12 @@ def rent_badminton():
         for i in range(task["processNum"]):
             rentArgs.update({"proxy": {"http": f"socks5://localhost:{torSocksPort}", 
                                         "https": f"socks5://localhost:{torSocksPort}"}})
+            rentArgs['rentCourtIDs'] = rentArgs['rentCourtIDs'][1:] + rentArgs['rentCourtIDs'][:1]
             task_inputs.append(copy.deepcopy(rentArgs))
             torSocksPort += 1
         tasks_inputs.append(task_inputs)
 
     torSocksPorts = utils.startTorService(totalProcessNum)
-    
-
     for pool, task_inputs in zip(pools, tasks_inputs):
         utils.waitToRent(task_inputs[0]['rentDatetime'])
         pool.map_async(doRent, task_inputs)

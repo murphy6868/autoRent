@@ -17,11 +17,11 @@ def runAsDaemon(target, args):
     p = multiprocessing.Process(target=target, args=args, daemon=True)
     p.start()
 
-
-def dump(s):
-    path = PROJECT_ROOT_PATH.joinpath('testing/dump.txt')
+def dump(s, fileName):
+    path = PROJECT_ROOT_PATH.joinpath(fileName)
     with path.open('w') as f:
         f.write(str(s))
+
 def dump_json(s):
     path = PROJECT_ROOT_PATH.joinpath('testing/dump_json.txt')
     with path.open('w') as f:
@@ -107,10 +107,9 @@ def getRentTasks():
             tasks = yaml.safe_load(f)
         return tasks
 
-def killTorService():
-    PROCNAME = "tor"
+def killTorService(ProcName = "tor"):
     for proc in psutil.process_iter():
-        if proc.name() == PROCNAME:
+        if proc.name() == ProcName:
             L.warning(f"killing {proc.pid}")
             proc.kill()
 
