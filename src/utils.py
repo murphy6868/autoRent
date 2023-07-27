@@ -3,6 +3,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import multiprocessing  
 import oyaml as yaml
+from fake_useragent import UserAgent
 import _dataclasses
 import logging, log_utils
 L = log_utils.createLogger(__name__, logging.DEBUG)
@@ -55,20 +56,21 @@ def createSession(proxy = {}):
     sess.get = functools.partial(sess.get, allow_redirects = False)
     sess.post = functools.partial(sess.post, allow_redirects = False)
     sess.proxies.update(proxy)
+    ua = UserAgent()
     sess.headers.update(
         {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:105.0) Gecko/20100101 Firefox/105.0",
+            "User-Agent": ua.random,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
             "Accept-Language": "zh-TW,zh;q=0.8,en-US;q=0.5,en;q=0.3",
             "Accept-Encoding": "gzip, deflate",
-            "Dnt": "1",
+            "Referer": "https://rent.pe.ntu.edu.tw/member/?U=login",
             "Upgrade-Insecure-Requests": "1",
             "Sec-Fetch-Dest": "document",
             "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-Site": "same-origin",
             "Sec-Fetch-User": "?1",
             "Te": "trailers",
-            "Connection": "close",
+            "Connection": "close"
         }
     )
     return sess

@@ -37,7 +37,7 @@ class SsoHelper():
         
 
     def __try_login(self, sess, rentDatetime=None):
-        res = sess.get(PE_SSO_URL)
+        res = sess.get(PE_SSO_URL, proxies=NO_PROXY)
         L.debug(f"location: {res.headers['location']}")
         res = sess.get(res.headers['location'], proxies=NO_PROXY)
 
@@ -65,7 +65,8 @@ class SsoHelper():
         L.debug(f"form.get('action'), {form.get('action')}")
         res = sess.post(
             form.get("action"),
-            data={ele.get("name"): ele.get("value") for ele in form.find_all("input")}, allow_redirects=False
+            data={ele.get("name"): ele.get("value") for ele in form.find_all("input")}, allow_redirects=False, 
+            proxies=NO_PROXY
         )
         
         L.info(f"SSO Login Finished!")

@@ -31,7 +31,8 @@ class RentalProcess:
         L.debug(f"using IP: {r.json()['ip_addr']}")
     
     def login(self):
-        self.sess = utils.createSession(proxy = self.proxy)
+        #self.sess = utils.createSession(proxy = self.proxy)
+        self.sess = utils.createSession()
         self.ssoHelper.login(self.sess)
 
     def rent(self, rentDatetime, rentHours, rentCourtID):

@@ -25,6 +25,7 @@ pyopenssl = "*"
 aiohttp = "*"
 aiosocksy = "*"
 pypasser = "*"
+fake-useragent = "*"
 
 [dev-packages]
 
